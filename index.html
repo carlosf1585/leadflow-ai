@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeadFlow AI | AI & Automation for Lead Generation</title>
+  <meta name="description" content="LeadFlow AI builds automation and artificial intelligence solutions for lead generation, lead management, and scalable customer acquisition." />
+  <meta name="theme-color" content="#0b1020" />
+  <style>
+    :root {
+      --bg: #081120;
+      --bg-soft: #0f1b33;
+      --card: rgba(255,255,255,0.06);
+      --card-border: rgba(255,255,255,0.12);
+      --text: #eef4ff;
+      --muted: #b7c6e3;
+      --accent: #67e8f9;
+      --accent-2: #8b5cf6;
+      --success: #86efac;
+      --shadow: 0 20px 60px rgba(0,0,0,0.35);
+      --radius: 24px;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(103,232,249,0.18), transparent 30%),
+        radial-gradient(circle at 85% 15%, rgba(139,92,246,0.18), transparent 25%),
+        linear-gradient(180deg, #081120 0%, #091325 45%, #07101d 100%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; }
+
+    .container {
+      width: min(calc(100% - 2rem), var(--max));
+      margin: 0 auto;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(14px);
+      background: rgba(8, 17, 32, 0.7);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
+
+    .brand-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #081120;
+      font-weight: 900;
+      box-shadow: var(--shadow);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.25rem;
+      align-items: center;
+      color: var(--muted);
+      font-size: .96rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .6rem;
+      padding: .95rem 1.25rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-weight: 700;
+      transition: .2s ease;
+      cursor: pointer;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #a5f3fc);
+      color: #06101b;
+      box-shadow: 0 10px 30px rgba(103,232,249,0.22);
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.14);
+      color: var(--text);
+    }
+
+    .hero {
+      padding: 5.5rem 0 4rem;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      color: var(--success);
+      background: rgba(134,239,172,0.08);
+      border: 1px solid rgba(134,239,172,0.14);
+      padding: .45rem .8rem;
+      border-radius: 999px;
+      font-size: .9rem;
+      margin-bottom: 1rem;
+    }
+
+    h1, h2, h3 { line-height: 1.12; margin: 0 0 1rem; }
+    h1 {
+      font-size: clamp(2.6rem, 5vw, 5rem);
+      letter-spacing: -0.04em;
+      max-width: 12ch;
+    }
+
+    .lead {
+      color: var(--muted);
+      font-size: 1.12rem;
+      max-width: 62ch;
+      margin-bottom: 1.6rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .9rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 1rem;
+      margin-top: 1.4rem;
+    }
+
+    .stat-card, .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .stat-card {
+      padding: 1.15rem;
+    }
+
+    .stat-card strong {
+      display: block;
+      font-size: 1.45rem;
+      margin-bottom: .2rem;
+    }
+
+    .dashboard {
+      padding: 1.2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dashboard::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(103,232,249,0.08), rgba(139,92,246,0.03));
+      pointer-events: none;
+    }
+
+    .dash-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .chip {
+      font-size: .83rem;
+      color: var(--muted);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: .35rem .7rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .bars {
+      display: grid;
+      gap: .9rem;
+      margin: 1rem 0 1.3rem;
+    }
+
+    .bar-row { display: grid; gap: .4rem; }
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .92rem;
+      color: var(--muted);
+    }
+    .bar-track {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .panel {
+      padding: 1rem;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    section {
+      padding: 2.5rem 0;
+    }
+
+    .section-head {
+      max-width: 720px;
+      margin-bottom: 2rem;
+    }
+
+    .section-head p {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 1.1rem;
+    }
+
+    .service-card, .process-card, .testimonial, .contact-card {
+      padding: 1.35rem;
+    }
+
+    .icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-size: 1.2rem;
+      background: linear-gradient(135deg, rgba(103,232,249,0.18), rgba(139,92,246,0.18));
+      border: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: .95rem;
+    }
+
+    .service-card p,
+    .process-card p,
+    .testimonial p,
+    .contact-copy,
+    .footer-copy { color: var(--muted); }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.1rem;
+    }
+
+    .process-card span.step {
+      display: inline-flex;
+      margin-bottom: .8rem;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: .06em;
+      font-size: .85rem;
+      text-transform: uppercase;
+    }
+
+    .pricing-wrap {
+      display: grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: 1.1rem;
+      align-items: stretch;
+    }
+
+    .pricing-highlight {
+      padding: 1.5rem;
+      background: linear-gradient(180deg, rgba(103,232,249,0.12), rgba(139,92,246,0.12));
+    }
+
+    .pricing-list {
+      display: grid;
+      gap: .9rem;
+    }
+
+    .pricing-item {
+      padding: 1rem 1.1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .contact-box {
+      display: grid;
+      grid-template-columns: 1fr .95fr;
+      gap: 1.1rem;
+    }
+
+    form {
+      display: grid;
+      gap: .85rem;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 1rem 1rem;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      outline: none;
+    }
+
+    textarea { min-height: 150px; resize: vertical; }
+    input::placeholder, textarea::placeholder { color: #95a7c8; }
+
+    footer {
+      padding: 2.2rem 0 3rem;
+      color: var(--muted);
+    }
+
+    .footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 1.2rem;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 980px) {
+      .hero-grid,
+      .two-col,
+      .pricing-wrap,
+      .contact-box,
+      .panel-grid,
+      .grid-3 {
+        grid-template-columns: 1fr;
+      }
+
+      .mini-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      h1 { max-width: 100%; }
+    }
+
+    @media (max-width: 640px) {
+      .hero { padding-top: 4rem; }
+      .btn { width: 100%; }
+      .hero-actions { display: grid; }
+      .footer-row { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="#top" aria-label="LeadFlow AI home">
+        <span class="brand-badge">LF</span>
+        <span>LeadFlow AI</span>
+      </a>
+      <div class="nav-links">
+        <a href="#services">Services</a>
+        <a href="#process">Process</a>
+        <a href="#about">About</a>
+        <a href="#contact">Contact</a>
+        <a class="btn btn-primary" href="#contact">Book a Strategy Call</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="reveal visible">
+          <div class="eyebrow">● Automation-Driven Growth for Modern Businesses</div>
+          <h1>Turn lead generation into a scalable revenue system.</h1>
+          <p class="lead">
+            We develop AI and automation solutions for lead generation, lead management, and lead commercialization. Our mission is to help companies streamline customer acquisition with scalable, data-driven systems that reduce manual work and improve conversion performance.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#contact">Start Your Project</a>
+            <a class="btn btn-secondary" href="#services">Explore Services</a>
+          </div>
+          <div class="mini-stats">
+            <div class="stat-card">
+              <strong>24/7</strong>
+              <span>Automated lead capture and qualification workflows</span>
+            </div>
+            <div class="stat-card">
+              <strong>Multi-Channel</strong>
+              <span>Website, ads, CRM, email, WhatsApp, and outbound sequences</span>
+            </div>
+            <div class="stat-card">
+              <strong>Data-Led</strong>
+              <span>Insights, routing, scoring, attribution, and optimization</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card dashboard reveal">
+          <div class="dash-top">
+            <div>
+              <strong>Acquisition Engine Overview</strong><br/>
+              <span class="chip">AI • Automation • Lead Ops</span>
+            </div>
+            <span class="chip">Live Workflow</span>
+          </div>
+
+          <div class="bars">
+            <div class="bar-row">
+              <div class="bar-label"><span>Lead Capture Efficiency</span><span>92%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:92%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label"><span>Qualification Accuracy</span><span>87%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:87%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label"><span>Routing Speed</span><span>96%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:96%"></div></div>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <div class="panel">
+              <strong>Inbound Automation</strong>
+              <p>Capture, enrich, score, and assign every lead with no operational bottlenecks.</p>
+            </div>
+            <div class="panel">
+              <strong>Conversion Optimization</strong>
+              <p>Trigger the right follow-up sequence based on source, intent, and behavior.</p>
+            </div>
+            <div class="panel">
+              <strong>Lead Intelligence</strong>
+              <p>Centralize lead data across channels for better qualification and reporting.</p>
+            </div>
+            <div class="panel">
+              <strong>Revenue Visibility</strong>
+              <p>Track what generates pipeline so your team can scale with confidence.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="services">
+      <div class="container">
+        <div class="section-head reveal">
+          <h2>What we build</h2>
+          <p>We design automation infrastructure and AI-powered workflows that support the full customer acquisition lifecycle, from first touch to sales-ready lead.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card service-card reveal">
+            <div class="icon">⚙️</div>
+            <h3>Lead Generation Automation</h3>
+            <p>Automated forms, chat flows, funnels, integrations, and lead capture systems built to generate qualified opportunities at scale.</p>
+          </article>
+          <article class="card service-card reveal">
+            <div class="icon">🧠</div>
+            <h3>AI Qualification Systems</h3>
+            <p>Use AI to pre-qualify inquiries, enrich records, score intent, and route prospects to the right workflow or sales owner.</p>
+          </article>
+          <article class="card service-card reveal">
+            <div class="icon">📈</div>
+            <h3>Commercialization & Follow-Up</h3>
+            <p>Automated nurture sequences, remarketing logic, CRM handoffs, and sales enablement processes focused on conversion.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="process">
+      <div class="container">
+        <div class="section-head reveal">
+          <h2>How we work</h2>
+          <p>Our approach combines process engineering, data analysis, and AI implementation to create systems that are practical, measurable, and ready to scale.</p>
+        </div>
+        <div class="two-col">
+          <article class="card process-card reveal">
+            <span class="step">Step 01</span>
+            <h3>Audit & Strategy</h3>
+            <p>We analyze your current acquisition process, lead sources, CRM structure, and operational bottlenecks to identify automation opportunities.</p>
+          </article>
+          <article class="card process-card reveal">
+            <span class="step">Step 02</span>
+            <h3>System Design</h3>
+            <p>We map the automation architecture, qualification logic, channel integrations, data flows, and conversion stages your business needs.</p>
+          </article>
+          <article class="card process-card reveal">
+            <span class="step">Step 03</span>
+            <h3>Implementation</h3>
+            <p>We build and connect the workflows, dashboards, automations, and AI layers required to run your lead engine efficiently.</p>
+          </article>
+          <article class="card process-card reveal">
+            <span class="step">Step 04</span>
+            <h3>Optimization & Scale</h3>
+            <p>We monitor performance, refine lead scoring, improve conversion steps, and scale the system as volume and complexity grow.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="about">
+      <div class="container pricing-wrap">
+        <div class="card pricing-highlight reveal">
+          <h2>Built for companies that need more than just leads.</h2>
+          <p class="contact-copy">
+            We help businesses create a reliable acquisition infrastructure: one that captures demand, qualifies prospects, routes opportunities intelligently, and supports revenue growth with less manual friction.
+          </p>
+          <p class="contact-copy">
+            Whether you are improving an existing funnel or building a lead operation from scratch, our work is focused on systems that are scalable, automated, and rooted in measurable business outcomes.
+          </p>
+        </div>
+        <div class="pricing-list reveal">
+          <div class="pricing-item">
+            <strong>Ideal for</strong>
+            <p class="contact-copy">B2B service companies, agencies, real estate teams, recruiters, sales operations, and growth-focused businesses.</p>
+          </div>
+          <div class="pricing-item">
+            <strong>Core capabilities</strong>
+            <p class="contact-copy">Lead capture, CRM automation, AI qualification, routing logic, workflow orchestration, and reporting dashboards.</p>
+          </div>
+          <div class="pricing-item">
+            <strong>Business outcome</strong>
+            <p class="contact-copy">Faster response time, cleaner pipelines, better lead visibility, and a more efficient path from interest to revenue.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container">
+        <div class="section-head reveal">
+          <h2>Why clients choose an automation-first approach</h2>
+          <p>Manual lead handling does not scale. Automated systems create consistency, speed, and measurable performance across every stage of customer acquisition.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card testimonial reveal">
+            <h3>Faster response cycles</h3>
+            <p>Automations reduce delays between lead submission and first contact, helping teams engage prospects while intent is still high.</p>
+          </article>
+          <article class="card testimonial reveal">
+            <h3>Better lead quality</h3>
+            <p>AI-driven enrichment and scoring help teams prioritize the right opportunities and reduce time spent on low-fit inquiries.</p>
+          </article>
+          <article class="card testimonial reveal">
+            <h3>Operational clarity</h3>
+            <p>Connected workflows and reporting create visibility across sources, funnels, and conversion stages so decisions are based on real data.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="container contact-box">
+        <div class="card contact-card reveal">
+          <h2>Let’s build your lead acquisition system.</h2>
+          <p class="contact-copy">
+            Tell us about your business, current lead flow, and growth goals. We’ll help you identify where AI and automation can generate the biggest impact.
+          </p>
+          <div class="contact-copy">
+            <strong>Email:</strong> hello@leadflowai.com<br/>
+            <strong>Location:</strong> Canada<br/>
+            <strong>Availability:</strong> Remote projects worldwide
+          </div>
+        </div>
+
+        <div class="card contact-card reveal">
+          <form onsubmit="handleSubmit(event)">
+            <input type="text" name="name" placeholder="Your name" required />
+            <input type="email" name="email" placeholder="Your email" required />
+            <input type="text" name="company" placeholder="Company name" />
+            <textarea name="message" placeholder="Tell us what you want to automate..." required></textarea>
+            <button class="btn btn-primary" type="submit">Send Inquiry</button>
+            <small id="form-message" class="contact-copy"></small>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-row">
+      <div>
+        <strong>LeadFlow AI</strong>
+        <div class="footer-copy">AI & automation solutions for scalable lead generation, management, and commercialization.</div>
+      </div>
+      <div class="footer-copy">© <span id="year"></span> LeadFlow AI. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll('.reveal').forEach((el, index) => {
+      if (!el.classList.contains('visible')) {
+        el.style.transitionDelay = `${Math.min(index * 60, 240)}ms`;
+      }
+      observer.observe(el);
+    });
+
+    function handleSubmit(event) {
+      event.preventDefault();
+      const msg = document.getElementById('form-message');
+      msg.textContent = 'Thanks! This demo form is ready to be connected to your email, CRM, or automation tool.';
+      event.target.reset();
+    }
+  </script>
+</body>
+</html>
