@@ -1,0 +1,110 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: leadflow
+      POSTGRES_PASSWORD: leadflow
+      POSTGRES_DB: leadflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./static:/app/static
+    restart: unless-stopped
+  scheduler:
+    build: .
+    command: python scheduler/cron.py
+    env_file: .env
+    depends_on: [api, redis]
+    restart: unless-stopped
+  agent-discovery:
+    build: .
+    command: python -m agents.discovery_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-outreach:
+    build: .
+    command: python -m agents.outreach_agent
+    env_file: .env
+    depends_on: [redis]
+    restart: unless-stopped
+  agent-qualify:
+    build: .
+    command: python -m agents.qualify_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-routing:
+    build: .
+    command: python -m agents.routing_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-billing:
+    build: .
+    command: python -m agents.billing_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-analytics:
+    build: .
+    command: python -m agents.analytics_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-niche:
+    build: .
+    command: python -m agents.niche_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-sales:
+    build: .
+    command: python -m agents.sales_agent
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+  agent-landing:
+    build: .
+    command: python -m agents.landing_agent
+    env_file: .env
+    depends_on: [redis]
+    restart: unless-stopped
+  agent-campaign:
+    build: .
+    command: python -m agents.campaign_agent
+    env_file: .env
+    depends_on: [redis]
+    restart: unless-stopped
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [api]
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  redis_data:
