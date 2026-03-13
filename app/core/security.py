@@ -8,42 +8,50 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", truncate_error=False)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
 ALGORITHM = "HS256"
 
 
+def _truncate_password(password: str) -> str:
+        """Truncate password to 72 bytes max (bcrypt limitation)."""
+        encoded = password.encode("utf-8")
+        if len(encoded) > 72:
+                    encoded = encoded[:72]
+                return encoded.decode("utf-8", errors="ignore")
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+        return pwd_context.hash(_truncate_password(password))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+        return pwd_context.verify(_truncate_password(plain), hashed)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
+        to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+        try:
+                    return jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
 async def get_current_business(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    payload = decode_token(credentials.credentials)
+        payload = decode_token(credentials.credentials)
     business_id = payload.get("sub")
     if not business_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-    return business_id
+                raise HTTPException(status_code=401, detail="Invalid token payload")
+            return business_id
 
 
 def require_admin(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    if credentials.credentials != settings.ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return True
+        if credentials.credentials != settings.ADMIN_TOKEN:
+                    raise HTTPException(status_code=403, detail="Admin access required")
+                return True
