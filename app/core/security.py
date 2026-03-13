@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", truncate_error=False)
 bearer_scheme = HTTPBearer()
 ALGORITHM = "HS256"
 
