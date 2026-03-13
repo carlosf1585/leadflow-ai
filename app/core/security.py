@@ -72,3 +72,15 @@ async def get_current_business(
         return business
     finally:
         db.close()
+
+
+def require_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    token = credentials.credentials
+    if token != settings.ADMIN_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return token
