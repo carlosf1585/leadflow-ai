@@ -14,44 +14,61 @@ ALGORITHM = "HS256"
 
 
 def _truncate_password(password: str) -> str:
-        """Truncate password to 72 bytes max (bcrypt limitation)."""
-        encoded = password.encode("utf-8")
-        if len(encoded) > 72:
-                    encoded = encoded[:72]
-                return encoded.decode("utf-8", errors="ignore")
+    """Truncate password to 72 bytes max (bcrypt limitation)."""
+    encoded = password.encode("utf-8")
+    if len(encoded) > 72:
+        encoded = encoded[:72]
+    return encoded.decode("utf-8", errors="ignore")
 
 
 def hash_password(password: str) -> str:
-        return pwd_context.hash(_truncate_password(password))
+    password = _truncate_password(password)
+    return pwd_context.hash(password)
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-        return pwd_context.verify(_truncate_password(plain), hashed)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    plain_password = _truncate_password(plain_password)
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-        to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
-def decode_token(token: str) -> dict:
-        try:
-                    return jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+async def get_current_business(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    from app.db.database import get_db
+    from app.db.models import Business
+    from sqlalchemy.orm import Session
 
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        business_id: str = payload.get("sub")
+        if business_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
 
-async def get_current_business(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-        payload = decode_token(credentials.credentials)
-    business_id = payload.get("sub")
-    if not business_id:
-                raise HTTPException(status_code=401, detail="Invalid token payload")
-            return business_id
-
-
-def require_admin(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-        if credentials.credentials != settings.ADMIN_TOKEN:
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return True
+    db_gen = get_db()
+    db: Session = next(db_gen)
+    try:
+        business = db.query(Business).filter(Business.id == int(business_id)).first()
+        if business is None:
+            raise credentials_exception
+        return business
+    finally:
+        db.close()
