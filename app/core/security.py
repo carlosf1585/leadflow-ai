@@ -1,34 +1,28 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
 ALGORITHM = "HS256"
 
 
-def _truncate_password(password: str) -> str:
-    """Truncate password to 72 bytes max (bcrypt limitation)."""
-    encoded = password.encode("utf-8")
-    if len(encoded) > 72:
-        encoded = encoded[:72]
-    return encoded.decode("utf-8", errors="ignore")
-
-
 def hash_password(password: str) -> str:
-    password = _truncate_password(password)
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt directly, truncating to 72 bytes."""
+    pwd_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    plain_password = _truncate_password(plain_password)
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a password against its bcrypt hash."""
+    pwd_bytes = plain_password.encode("utf-8")[:72]
+    return bcrypt.checkpw(pwd_bytes, hashed_password.encode("utf-8"))
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
