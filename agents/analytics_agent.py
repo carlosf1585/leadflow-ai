@@ -34,6 +34,26 @@ class AnalyticsAgent(BaseAgent):
                 revenue = await repo.daily_revenue()
                 by_niche = await repo.revenue_by_niche()
                 log.info("Daily report", revenue=revenue, by_niche=by_niche)
+                            today = datetime.now().strftime("%B %d, %Y")
+                            subject = f"LeadFlow AI Daily Report - {today} | Revenue: ${revenue:.2f}"
+                            html = f"<h2>LeadFlow AI Daily Report - {today}</h2><p><b>Revenue Today:</b> ${revenue:.2f}</p>"
+                            try:
+                                                import smtplib, ssl
+                                                from email.mime.multipart import MIMEMultipart
+                                                from email.mime.text import MIMEText
+                                                from datetime import datetime as dt
+                                                msg = MIMEMultipart("alternative")
+                                                msg["Subject"] = subject
+                                                msg["From"] = settings.SMTP_USER
+                                                msg["To"] = "carlosalberto37@gmail.com"
+                                                msg.attach(MIMEText(html, "html"))
+                                                ctx = ssl.create_default_context()
+                                                with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, context=ctx) as s:
+                                                                        s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                                                                        s.sendmail(settings.SMTP_USER, "carlosalberto37@gmail.com", msg.as_string())
+                                                                    log.info("Daily report email sent")
+                            except Exception as e:
+                                log.error("Report email failed", error=str(e))
 
 
 if __name__ == "__main__":
