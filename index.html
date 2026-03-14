@@ -192,9 +192,9 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
   <div class="container nav-inner">
     <a class="logo" href="#" onclick="showPage('home')">LeadFlow<span>360</span></a>
     <div class="nav-links" id="navLinks">
-      <a href="#" onclick="scrollTo('features')">How It Works</a>
-      <a href="#" onclick="scrollTo('services')">Services</a>
-      <a href="#" onclick="scrollTo('pricing')">Pricing</a>
+      <a href="#" onclick="scrollToSection('features')">How It Works</a>
+      <a href="#" onclick="scrollToSection('services')">Services</a>
+      <a href="#" onclick="scrollToSection('pricing')">Pricing</a>
     </div>
     <div style="display:flex;gap:.7rem;align-items:center">
       <button class="btn btn-dark btn-sm" id="loginBtn" onclick="showPage('login')">Sign In</button>
@@ -224,7 +224,7 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
       <p class="hero-sub">Stop chasing customers. Our AI finds, qualifies, and delivers ready-to-buy leads directly to your inbox. Pay only for the leads you receive.</p>
       <div class="hero-btns">
         <button class="btn btn-primary" onclick="showPage('register')">Start Getting Leads Today</button>
-        <button class="btn btn-outline" onclick="scrollTo('features')">See How It Works</button>
+        <button class="btn btn-outline" onclick="scrollToSection('features')">See How It Works</button>
       </div>
       <div class="stats-row">
         <div class="stat"><strong>500+</strong><span>Leads Delivered/Month</span></div>
@@ -698,9 +698,9 @@ function showPage(name) {
   if (name === 'dashboard') loadDashboard();
 }
 
-function scrollTo(id) {
+function scrollToSection(id) {
   showPage('home');
-  setTimeout(() => { const el = document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth'}); }, 100);
+  setTimeout(() => { const el = document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth'}); }, 100); return;
 }
 
 function updateNav() {
