@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import smtplib
 import structlog
@@ -149,12 +150,17 @@ async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
     })
     token = create_access_token({"sub": business.id})
 
-    _send_welcome_email(
-        to_email=data.email,
-        business_name=data.name,
-        service_type=str(data.service_type.value if hasattr(data.service_type, 'value') else data.service_type),
-        city=data.city,
-        plan=data.plan,
+    asyncio.ensure_future(
+        asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: _send_welcome_email(
+                to_email=data.email,
+                business_name=data.name,
+                service_type=str(data.service_type.value if hasattr(data.service_type, 'value') else data.service_type),
+                city=data.city,
+                plan=data.plan,
+            )
+        )
     )
 
     return {
