@@ -32,8 +32,8 @@ class BusinessRegister(BaseModel):
             state: str = None
             service_type: ServiceType
             plan: str = "pay_per_lead"  # pay_per_lead | starter | growth
-            latitude: float = None
-            longitude: float = None
+                    latitude: float = None
+                    longitude: float = None
 
 
 class BusinessLogin(BaseModel):
