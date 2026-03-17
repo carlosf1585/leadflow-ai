@@ -5,22 +5,22 @@ import secrets
 import structlog
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.security import create_access_token, hash_password, verify_password, get_current_business
-from app.db.database import get_db
-from app.db.models import ServiceType, BusinessStatus
-from app.db.repositories.business_repo import BusinessRepository
+
 from app.core.config import settings
+from app.core.security import create_access_token, get_current_business, hash_password, verify_password
+from app.db.database import get_db
+from app.db.models import Business, BusinessStatus, Lead, LeadAssignment, ServiceType, Subscription, SubscriptionStatus
+from app.db.repositories.business_repo import BusinessRepository
 
 log = structlog.get_logger()
 router = APIRouter()
 
-
-# ------------------------------------------------------------------ #
-# Schemas                                                              #
-# ------------------------------------------------------------------ #
 
 class BusinessRegister(BaseModel):
     name: str
@@ -31,7 +31,7 @@ class BusinessRegister(BaseModel):
     city: str
     state: str = None
     service_type: ServiceType
-    plan: str = "pay_per_lead"  # pay_per_lead | starter | growth
+    plan: str = "pay_per_lead"
     latitude: float = None
     longitude: float = None
 
@@ -41,10 +41,6 @@ class BusinessLogin(BaseModel):
     password: str
 
 
-# ------------------------------------------------------------------ #
-# Welcome email                                                        #
-# ------------------------------------------------------------------ #
-
 PLAN_LABELS = {
     "pay_per_lead": "Pay Per Lead",
     "starter": "Starter — $149/mo",
@@ -52,9 +48,9 @@ PLAN_LABELS = {
 }
 
 PLAN_NEXT_STEPS = {
-    "pay_per_lead": "You are on the <strong>Pay Per Lead</strong> plan. No monthly fee — you only pay when we deliver a lead. Your card will be saved for automatic billing.",
-    "starter": "You selected the <strong>Starter Plan ($149/mo)</strong>. Up to 10 exclusive leads per month at a discounted rate. You will be redirected to complete your payment.",
-    "growth": "You selected the <strong>Growth Plan ($299/mo)</strong>. Up to 25 exclusive leads per month at our best rate. You will be redirected to complete your payment.",
+    "pay_per_lead": "You are on the <strong>Pay Per Lead</strong> plan. No monthly fee — you only pay when we deliver a lead. Your card will be saved for automatic billing after email verification.",
+    "starter": "You selected the <strong>Starter Plan ($149/mo)</strong>. Up to 10 exclusive leads per month at a discounted rate. Verify your email first, then complete payment setup.",
+    "growth": "You selected the <strong>Growth Plan ($299/mo)</strong>. Up to 25 exclusive leads per month at our best rate. Verify your email first, then complete payment setup.",
 }
 
 
@@ -87,32 +83,20 @@ def _send_welcome_email(to_email: str, business_name: str, service_type: str, ci
     <div style="background:#0d1117;border-radius:8px;padding:20px;margin:20px 0;">
       <h3 style="color:#00d4ff;margin-top:0;">What happens next:</h3>
       <ul style="color:#c9d1d9;line-height:1.8;padding-left:20px;">
-        <li>Complete your card setup in your dashboard to activate lead delivery</li>
+        <li>Verify your email address to activate billing</li>
+        <li>Complete your card setup in your dashboard</li>
         <li>Our AI scans thousands of sources for active buyers</li>
         <li>Leads are qualified and verified before delivery</li>
         <li>You receive <strong>exclusive leads</strong> — no sharing with competitors</li>
-        <li>Expect your <strong>first lead within 24 hours</strong></li>
       </ul>
     </div>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="https://leadflow360.ca" style="background:#00d4ff;color:#06101b;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
-        Go to My Dashboard
-      </a>
-    </div>
-    <p style="color:#8b949e;font-size:13px;margin-top:25px;">
-      Questions? Contact us at <a href="mailto:leads@leadflow360.ca" style="color:#00d4ff;">leads@leadflow360.ca</a>
-    </p>
   </div>
-  <p style="text-align:center;color:#8b949e;font-size:12px;margin-top:20px;">
-    2026 LeadFlow360 | leadflow360.ca
-  </p>
 </div>
 </body></html>
 """
         msg.attach(MIMEText(html, 'html'))
         import ssl
         ctx = ssl.create_default_context()
-        # Use port 587 with STARTTLS (port 465 SSL is blocked on Railway)
         with smtplib.SMTP(settings.SMTP_HOST, 587) as server:
             server.ehlo()
             server.starttls(context=ctx)
@@ -140,7 +124,7 @@ def _send_verification_email(to_email: str, business_name: str, token: str):
   <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:30px;">
     <h2 style="color:#fff;margin-top:0;">Verify your email, {business_name}</h2>
     <p style="color:#c9d1d9;line-height:1.6;">
-      Thanks for signing up! Click the button below to verify your email address and activate your account.
+      Thanks for signing up! Click the button below to verify your email address and unlock billing setup.
     </p>
     <div style="text-align:center;margin:30px 0;">
       <a href="{verify_url}" style="background:#00d4ff;color:#06101b;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;font-size:16px;">
@@ -148,7 +132,7 @@ def _send_verification_email(to_email: str, business_name: str, token: str):
       </a>
     </div>
     <p style="color:#8b949e;font-size:12px;">
-      This link expires in 24 hours. If you did not create this account, ignore this email.
+      If you did not create this account, ignore this email.
     </p>
   </div>
 </div>
@@ -167,10 +151,6 @@ def _send_verification_email(to_email: str, business_name: str, token: str):
     except Exception as e:
         log.error("verification_email_failed", error=str(e))
 
-
-# ------------------------------------------------------------------ #
-# Routes                                                               #
-# ------------------------------------------------------------------ #
 
 @router.post("/register")
 async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
@@ -197,32 +177,22 @@ async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
         "latitude": data.latitude,
         "longitude": data.longitude,
         "status": BusinessStatus.PROSPECT,
+        "email_verified": False,
+        "email_verification_token": verification_token,
     })
+    await db.flush()
+
     token = create_access_token({"sub": business.id})
 
-    asyncio.ensure_future(
-        asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: _send_verification_email(
-                to_email=data.email,
-                business_name=data.name,
-                token=verification_token,
-            )
-        )
-    )
-
-    asyncio.ensure_future(
-        asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: _send_welcome_email(
-                to_email=data.email,
-                business_name=data.name,
-                service_type=str(data.service_type.value if hasattr(data.service_type, 'value') else data.service_type),
-                city=data.city,
-                plan=data.plan,
-            )
-        )
-    )
+    loop = asyncio.get_event_loop()
+    asyncio.ensure_future(loop.run_in_executor(None, lambda: _send_verification_email(data.email, data.name, verification_token)))
+    asyncio.ensure_future(loop.run_in_executor(None, lambda: _send_welcome_email(
+        to_email=data.email,
+        business_name=data.name,
+        service_type=str(data.service_type.value if hasattr(data.service_type, 'value') else data.service_type),
+        city=data.city,
+        plan=data.plan,
+    )))
 
     return {
         "access_token": token,
@@ -231,16 +201,22 @@ async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
         "plan": data.plan,
         "needs_card_setup": True,
         "email_verification_sent": True,
+        "email_verified": False,
     }
 
 
 @router.get("/verify-email/{token}")
-async def verify_email(token: str):
-    return {
-        "verified": True,
-        "message": "Email verified successfully. You can now log in to your dashboard.",
-        "redirect": "https://leadflow360.ca",
-    }
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Business).where(Business.email_verification_token == token))
+    business = result.scalar_one_or_none()
+    if not business:
+        raise HTTPException(status_code=404, detail="Invalid or expired verification token")
+
+    business.email_verified = True
+    business.email_verification_token = None
+    await db.flush()
+
+    return RedirectResponse(url="https://leadflow360.ca/?verification=success")
 
 
 @router.post("/login")
@@ -255,6 +231,7 @@ async def login(data: BusinessLogin, db: AsyncSession = Depends(get_db)):
         "token_type": "bearer",
         "business_id": business.id,
         "plan": getattr(business, "plan", "pay_per_lead"),
+        "email_verified": bool(getattr(business, "email_verified", False)),
     }
 
 
@@ -263,8 +240,6 @@ async def dashboard(
     db: AsyncSession = Depends(get_db),
     business_id: str = Depends(get_current_business),
 ):
-    from sqlalchemy import select
-    from app.db.models import LeadAssignment, Lead, Subscription
     repo = BusinessRepository(db)
     business = await repo.get_by_id(business_id)
     if not business:
@@ -300,7 +275,7 @@ async def dashboard(
     sub_result = await db.execute(
         select(Subscription).where(
             Subscription.business_id == business_id,
-            Subscription.status == "active",
+            Subscription.status == SubscriptionStatus.ACTIVE,
         )
     )
     subscription = sub_result.scalar_one_or_none()
@@ -314,12 +289,13 @@ async def dashboard(
         "city": business.city,
         "status": business.status.value if business.status else None,
         "plan": getattr(business, "plan", "pay_per_lead"),
+        "email_verified": bool(getattr(business, "email_verified", False)),
         "has_payment_method": bool(business.stripe_payment_method_id),
         "subscription": {
             "plan": subscription.plan if subscription else None,
             "monthly_lead_limit": subscription.monthly_lead_limit if subscription else None,
             "leads_used": subscription.leads_used_this_month if subscription else None,
-            "status": subscription.status.value if subscription else None,
+            "status": subscription.status.value if subscription and subscription.status else None,
         } if subscription else None,
         "leads": leads_data,
         "total_leads": len(leads_data),

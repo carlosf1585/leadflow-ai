@@ -54,6 +54,8 @@ class Business(Base):
     service_type = Column(Enum(ServiceType), nullable=False)
     status = Column(Enum(BusinessStatus), default=BusinessStatus.PROSPECT)
     hashed_password = Column(String)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_token = Column(String, unique=True)
 
     # Billing plan: pay_per_lead | starter | growth
     plan = Column(String, default="pay_per_lead")

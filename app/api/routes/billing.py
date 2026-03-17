@@ -1,9 +1,12 @@
 import uuid
+
 import stripe
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.core.security import get_current_business
 from app.db.database import get_db
@@ -14,17 +17,13 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 log = structlog.get_logger()
 router = APIRouter()
 
-# ------------------------------------------------------------------ #
-#  Plan definitions                                                    #
-# ------------------------------------------------------------------ #
-
 PLANS = {
     "pay_per_lead": {
         "name": "Pay Per Lead",
         "description": "No subscription. Pay only for leads you receive. Premium pricing.",
         "price_month": 0,
-        "monthly_leads": 999,       # Unlimited
-        "lead_price_multiplier": 1.0,  # Full price (highest)
+        "monthly_leads": 999,
+        "lead_price_multiplier": 1.0,
         "stripe_price_id": None,
         "features": [
             "No monthly commitment",
@@ -39,7 +38,7 @@ PLANS = {
         "description": "Perfect for growing businesses. Up to 10 leads per month.",
         "price_month": settings.PLAN_STARTER_PRICE_MONTH,
         "monthly_leads": settings.PLAN_STARTER_MONTHLY_LEADS,
-        "lead_price_multiplier": 0.78,  # ~22% discount vs pay-per-lead
+        "lead_price_multiplier": 0.78,
         "stripe_price_id": settings.STRIPE_PRICE_STARTER,
         "features": [
             f"Up to {settings.PLAN_STARTER_MONTHLY_LEADS} leads/month",
@@ -54,7 +53,7 @@ PLANS = {
         "description": "For established businesses scaling fast. Up to 25 leads per month.",
         "price_month": settings.PLAN_GROWTH_PRICE_MONTH,
         "monthly_leads": settings.PLAN_GROWTH_MONTHLY_LEADS,
-        "lead_price_multiplier": 0.62,  # ~38% discount vs pay-per-lead
+        "lead_price_multiplier": 0.62,
         "stripe_price_id": settings.STRIPE_PRICE_GROWTH,
         "features": [
             f"Up to {settings.PLAN_GROWTH_MONTHLY_LEADS} leads/month",
@@ -67,25 +66,16 @@ PLANS = {
 }
 
 
-# ------------------------------------------------------------------ #
-#  Schemas                                                             #
-# ------------------------------------------------------------------ #
-
 class SetupIntentRequest(BaseModel):
-    plan: str = "pay_per_lead"  # pay_per_lead | starter | growth
+    plan: str = "pay_per_lead"
 
 
 class SubscribeRequest(BaseModel):
-    plan: str  # starter | growth
+    plan: str
 
-
-# ------------------------------------------------------------------ #
-#  Endpoints                                                           #
-# ------------------------------------------------------------------ #
 
 @router.get("/plans")
 async def get_plans():
-    """Return all available plans for the frontend."""
     result = {}
     for plan_id, plan in PLANS.items():
         result[plan_id] = {
@@ -105,16 +95,17 @@ async def create_setup_intent(
     db: AsyncSession = Depends(get_db),
     business_id: str = Depends(get_current_business),
 ):
-    """Create a Stripe SetupIntent to save the card. Returns client_secret for Stripe.js."""
     repo = BusinessRepository(db)
     business = await repo.get_by_id(business_id)
     if not business:
         raise HTTPException(status_code=404, detail="Not found")
 
+    if not getattr(business, "email_verified", False):
+        raise HTTPException(status_code=403, detail="Verify your email before setting up billing.")
+
     if data.plan not in PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan")
 
-    # Create Stripe customer if not exists
     if not business.stripe_customer_id:
         customer = stripe.Customer.create(
             email=business.email,
@@ -122,14 +113,10 @@ async def create_setup_intent(
             metadata={"business_id": business_id, "plan": data.plan},
         )
         business.stripe_customer_id = customer["id"]
-        business.plan = data.plan
-        await db.commit()
-    else:
-        # Update plan selection
-        business.plan = data.plan
-        await db.commit()
 
-    # Create setup intent
+    business.plan = data.plan
+    await db.flush()
+
     intent = stripe.SetupIntent.create(
         customer=business.stripe_customer_id,
         payment_method_types=["card"],
@@ -148,7 +135,6 @@ async def subscribe(
     db: AsyncSession = Depends(get_db),
     business_id: str = Depends(get_current_business),
 ):
-    """Subscribe the business to a monthly plan (starter or growth)."""
     if data.plan not in ("starter", "growth"):
         raise HTTPException(status_code=400, detail="Use 'starter' or 'growth' plan for subscription")
 
@@ -164,8 +150,6 @@ async def subscribe(
     if not price_id:
         raise HTTPException(status_code=400, detail=f"Stripe Price ID not configured for plan '{data.plan}'")
 
-    # Cancel any existing subscription
-    from sqlalchemy import select
     result = await db.execute(
         select(Subscription).where(
             Subscription.business_id == business_id,
@@ -176,9 +160,8 @@ async def subscribe(
     if existing:
         stripe.Subscription.cancel(existing.stripe_subscription_id)
         existing.status = SubscriptionStatus.CANCELLED
-        await db.commit()
+        await db.flush()
 
-    # Create new subscription
     sub = stripe.Subscription.create(
         customer=business.stripe_customer_id,
         items=[{"price": price_id}],
@@ -197,7 +180,7 @@ async def subscribe(
     )
     db.add(db_sub)
     business.plan = data.plan
-    await db.commit()
+    await db.flush()
 
     log.info("Subscribed", business_id=business_id, plan=data.plan, sub_id=sub["id"])
     return {
@@ -214,8 +197,6 @@ async def cancel_subscription(
     db: AsyncSession = Depends(get_db),
     business_id: str = Depends(get_current_business),
 ):
-    """Cancel the active subscription and revert to pay-per-lead."""
-    from sqlalchemy import select
     result = await db.execute(
         select(Subscription).where(
             Subscription.business_id == business_id,
@@ -233,5 +214,5 @@ async def cancel_subscription(
     business = await repo.get_by_id(business_id)
     if business:
         business.plan = "pay_per_lead"
-    await db.commit()
+    await db.flush()
     return {"message": "Subscription cancelled. Reverted to Pay Per Lead."}
