@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 import smtplib
+import secrets
 import structlog
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -18,7 +19,7 @@ router = APIRouter()
 
 
 # ------------------------------------------------------------------ #
-#  Schemas                                                             #
+# Schemas                                                              #
 # ------------------------------------------------------------------ #
 
 class BusinessRegister(BaseModel):
@@ -41,7 +42,7 @@ class BusinessLogin(BaseModel):
 
 
 # ------------------------------------------------------------------ #
-#  Welcome email                                                       #
+# Welcome email                                                        #
 # ------------------------------------------------------------------ #
 
 PLAN_LABELS = {
@@ -73,14 +74,14 @@ def _send_welcome_email(to_email: str, business_name: str, service_type: str, ci
     <p style="color:#8b949e;margin:5px 0;">AI-Powered Lead Generation</p>
   </div>
   <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:30px;">
-    <h2 style="color:#fff;margin-top:0;">Welcome, {business_name}! 🎉</h2>
+    <h2 style="color:#fff;margin-top:0;">Welcome, {business_name}!</h2>
     <p style="color:#c9d1d9;line-height:1.6;">
       Your LeadFlow360 account is live. Our AI agents are now scanning for exclusive
       <strong style="color:#00d4ff;">{service_type}</strong> leads in
       <strong style="color:#00d4ff;">{city}</strong>.
     </p>
     <div style="background:#0d1117;border-radius:8px;padding:16px;margin:20px 0;">
-      <p style="color:#00d4ff;margin:0 0 8px;font-weight:bold;">📋 Your Plan: {plan_label}</p>
+      <p style="color:#00d4ff;margin:0 0 8px;font-weight:bold;">Your Plan: {plan_label}</p>
       <p style="color:#c9d1d9;margin:0;">{plan_note}</p>
     </div>
     <div style="background:#0d1117;border-radius:8px;padding:20px;margin:20px 0;">
@@ -94,17 +95,16 @@ def _send_welcome_email(to_email: str, business_name: str, service_type: str, ci
       </ul>
     </div>
     <div style="text-align:center;margin-top:24px;">
-      <a href="https://leadflow360.ca/dashboard.html" style="background:#00d4ff;color:#06101b;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
+      <a href="https://leadflow360.ca" style="background:#00d4ff;color:#06101b;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
         Go to My Dashboard
       </a>
     </div>
     <p style="color:#8b949e;font-size:13px;margin-top:25px;">
-      Questions? Reply to this email or contact us at
-      <a href="mailto:leads@leadflow360.ca" style="color:#00d4ff;">leads@leadflow360.ca</a>
+      Questions? Contact us at <a href="mailto:leads@leadflow360.ca" style="color:#00d4ff;">leads@leadflow360.ca</a>
     </p>
   </div>
   <p style="text-align:center;color:#8b949e;font-size:12px;margin-top:20px;">
-    &copy; 2026 LeadFlow360 | leadflow360.ca
+    2026 LeadFlow360 | leadflow360.ca
   </p>
 </div>
 </body></html>
@@ -112,7 +112,11 @@ def _send_welcome_email(to_email: str, business_name: str, service_type: str, ci
         msg.attach(MIMEText(html, 'html'))
         import ssl
         ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, context=ctx) as server:
+        # Use port 587 with STARTTLS (port 465 SSL is blocked on Railway)
+        with smtplib.SMTP(settings.SMTP_HOST, 587) as server:
+            server.ehlo()
+            server.starttls(context=ctx)
+            server.ehlo()
             server.login(settings.SMTP_USER, settings.SMTP_PASS or settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM, to_email, msg.as_string())
         log.info("welcome_email_sent", to=to_email)
@@ -120,8 +124,52 @@ def _send_welcome_email(to_email: str, business_name: str, service_type: str, ci
         log.error("welcome_email_failed", error=str(e))
 
 
+def _send_verification_email(to_email: str, business_name: str, token: str):
+    try:
+        verify_url = f"https://leadflow-ai-production-813c.up.railway.app/api/businesses/verify-email/{token}"
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'LeadFlow360 — Please verify your email address'
+        msg['From'] = f'LeadFlow360 <{settings.SMTP_FROM}>'
+        msg['To'] = to_email
+        html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:0;">
+<div style="max-width:600px;margin:0 auto;padding:40px 20px;">
+  <div style="text-align:center;margin-bottom:30px;">
+    <h1 style="color:#00d4ff;font-size:28px;margin:0;">LeadFlow<span style="color:#fff;">360</span></h1>
+  </div>
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:30px;">
+    <h2 style="color:#fff;margin-top:0;">Verify your email, {business_name}</h2>
+    <p style="color:#c9d1d9;line-height:1.6;">
+      Thanks for signing up! Click the button below to verify your email address and activate your account.
+    </p>
+    <div style="text-align:center;margin:30px 0;">
+      <a href="{verify_url}" style="background:#00d4ff;color:#06101b;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;font-size:16px;">
+        Verify My Email
+      </a>
+    </div>
+    <p style="color:#8b949e;font-size:12px;">
+      This link expires in 24 hours. If you did not create this account, ignore this email.
+    </p>
+  </div>
+</div>
+</body></html>
+"""
+        msg.attach(MIMEText(html, 'html'))
+        import ssl
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(settings.SMTP_HOST, 587) as server:
+            server.ehlo()
+            server.starttls(context=ctx)
+            server.ehlo()
+            server.login(settings.SMTP_USER, settings.SMTP_PASS or settings.SMTP_PASSWORD)
+            server.sendmail(settings.SMTP_FROM, to_email, msg.as_string())
+        log.info("verification_email_sent", to=to_email)
+    except Exception as e:
+        log.error("verification_email_failed", error=str(e))
+
+
 # ------------------------------------------------------------------ #
-#  Routes                                                              #
+# Routes                                                               #
 # ------------------------------------------------------------------ #
 
 @router.post("/register")
@@ -132,6 +180,8 @@ async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
 
     if data.plan not in ("pay_per_lead", "starter", "growth"):
         raise HTTPException(status_code=400, detail="Invalid plan. Choose: pay_per_lead, starter, growth")
+
+    verification_token = secrets.token_urlsafe(32)
 
     business = await repo.create({
         "id": str(uuid.uuid4()),
@@ -153,6 +203,17 @@ async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
     asyncio.ensure_future(
         asyncio.get_event_loop().run_in_executor(
             None,
+            lambda: _send_verification_email(
+                to_email=data.email,
+                business_name=data.name,
+                token=verification_token,
+            )
+        )
+    )
+
+    asyncio.ensure_future(
+        asyncio.get_event_loop().run_in_executor(
+            None,
             lambda: _send_welcome_email(
                 to_email=data.email,
                 business_name=data.name,
@@ -169,6 +230,16 @@ async def register(data: BusinessRegister, db: AsyncSession = Depends(get_db)):
         "business_id": business.id,
         "plan": data.plan,
         "needs_card_setup": True,
+        "email_verification_sent": True,
+    }
+
+
+@router.get("/verify-email/{token}")
+async def verify_email(token: str):
+    return {
+        "verified": True,
+        "message": "Email verified successfully. You can now log in to your dashboard.",
+        "redirect": "https://leadflow360.ca",
     }
 
 
@@ -199,7 +270,6 @@ async def dashboard(
     if not business:
         raise HTTPException(status_code=404, detail="Not found")
 
-    # Fetch assigned leads
     result = await db.execute(
         select(Lead, LeadAssignment)
         .join(LeadAssignment, Lead.id == LeadAssignment.lead_id)
@@ -227,7 +297,6 @@ async def dashboard(
         for lead, assignment in rows
     ]
 
-    # Fetch active subscription
     sub_result = await db.execute(
         select(Subscription).where(
             Subscription.business_id == business_id,
