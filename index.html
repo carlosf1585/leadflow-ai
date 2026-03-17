@@ -432,6 +432,18 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
             <div class="form-group"><label>City *</label><input type="text" id="reg-city" placeholder="e.g. Toronto" /></div>
           </div>
 
+          <!-- PASSWORD FIELDS -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Password *</label>
+              <input type="password" id="reg-password" placeholder="Min. 8 characters" autocomplete="new-password" />
+            </div>
+            <div class="form-group">
+              <label>Confirm Password *</label>
+              <input type="password" id="reg-password-confirm" placeholder="Repeat your password" autocomplete="new-password" />
+            </div>
+          </div>
+
           <!-- PLAN SELECTION -->
           <div class="form-group">
             <label>Choose Your Plan *</label>
@@ -648,7 +660,7 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
 //  CONFIG                                                           //
 // ================================================================ //
 const API = 'https://leadflow-ai-production-813c.up.railway.app/api';
-const STRIPE_PK = 'pk_live_YOUR_STRIPE_PUBLISHABLE_KEY'; // Replace with your actual key
+const STRIPE_PK = window.__STRIPE_PK__ || 'pk_live_YOUR_STRIPE_PUBLISHABLE_KEY'; // Set STRIPE_PUBLISHABLE_KEY env var or replace this
 
 // ================================================================ //
 //  STATE                                                            //
@@ -777,7 +789,10 @@ async function doRegister() {
   hideMsg(msg);
 
   try {
-    const password = email.split('@')[0] + 'Lead2024!' + Math.random().toString(36).substr(2,4);
+    const password = document.getElementById('reg-password').value;
+    const passwordConfirm = document.getElementById('reg-password-confirm').value;
+    if (!password || password.length < 8) { showMsg(msg, 'error', 'Password must be at least 8 characters.'); btn.innerHTML = 'Continue →'; return; }
+    if (password !== passwordConfirm) { showMsg(msg, 'error', 'Passwords do not match.'); btn.innerHTML = 'Continue →'; return; }
     const res = await fetch(API + '/businesses/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -791,12 +806,13 @@ async function doRegister() {
     localStorage.setItem('lf_token', token);
     localStorage.setItem('lf_biz_id', businessId);
     localStorage.setItem('lf_plan', selectedPlan);
-    localStorage.setItem('lf_pass', password); // Save for reference
+    // Password is user-set — not stored in localStorage for security
 
-    // Move to step 2 (card setup)
-    gotoRegStep(2);
-    // Get setup intent
+    // Move to step 2 (card setup) - show verification message first
+    showMsg(msg, 'success', '\u2705 Account created! A verification email has been sent to ' + email + '. Check your inbox.');
+    // Get setup intent (async)
     await initCardSetup();
+    setTimeout(() => gotoRegStep(2), 1800);
 
   } catch (e) {
     showMsg(msg, 'error', e.message);
