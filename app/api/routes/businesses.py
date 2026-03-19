@@ -2,6 +2,7 @@ import asyncio
 import uuid
 import secrets
 import httpx
+import stripe
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -15,6 +16,7 @@ from app.db.models import Business, BusinessStatus, Lead, LeadAssignment, Servic
 
 log = structlog.get_logger()
 router = APIRouter()
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 class BusinessRegister(BaseModel):
@@ -173,6 +175,22 @@ async def dashboard(
     business = result.scalar_one_or_none()
     if not business:
         raise HTTPException(status_code=404, detail="Not found")
+
+    # Self-heal billing state if webhook/confirm callback was missed.
+    if not business.stripe_payment_method_id and business.stripe_customer_id:
+        try:
+            methods = stripe.PaymentMethod.list(
+                customer=business.stripe_customer_id,
+                type="card",
+                limit=1,
+            )
+            if methods and methods.get("data"):
+                business.stripe_payment_method_id = methods["data"][0]["id"]
+                business.status = BusinessStatus.ACTIVE
+                await db.flush()
+                log.info("Backfilled stripe payment method from Stripe API", business_id=business_id)
+        except Exception as e:
+            log.warning("Could not backfill payment method from Stripe API", business_id=business_id, error=str(e))
     rows_result = await db.execute(
         select(Lead, LeadAssignment)
         .join(LeadAssignment, Lead.id == LeadAssignment.lead_id)
