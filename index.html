@@ -199,8 +199,17 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
     <div style="display:flex;gap:.7rem;align-items:center">
       <button class="btn btn-dark btn-sm" id="loginBtn" onclick="showPage('login')">Sign In</button>
       <button class="btn btn-primary btn-sm" id="getLeadsBtn" onclick="showPage('register')">Get Leads</button>
-      <button class="btn btn-outline btn-sm" id="dashBtn" onclick="showPage('dashboard')" style="display:none">Dashboard</button>
-      <button class="btn btn-dark btn-sm" id="logoutBtn" onclick="doLogout()" style="display:none">Log Out</button>
+      <div class="profile-menu-wrap" id="profileMenuWrap" style="display:none;position:relative">
+        <button class="btn btn-dark btn-sm" id="profileMenuBtn" onclick="toggleProfileMenu()">&#9881; My Account &#9660;</button>
+        <div id="profileDropdown" style="display:none;position:absolute;right:0;top:110%;background:#0c1829;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:.5rem;min-width:200px;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+          <a href="#" onclick="showPage('dashboard');closeProfileMenu()" style="display:block;padding:.6rem 1rem;border-radius:8px;font-size:.9rem;color:var(--text)" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">&#128202; Dashboard</a>
+          <a href="#" onclick="showPage('profile');closeProfileMenu()" style="display:block;padding:.6rem 1rem;border-radius:8px;font-size:.9rem;color:var(--text)" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">&#128100; My Profile</a>
+          <a href="#" onclick="showPage('payment');closeProfileMenu()" style="display:block;padding:.6rem 1rem;border-radius:8px;font-size:.9rem;color:var(--text)" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">&#128179; Payment Method</a>
+          <a href="#" onclick="showPage('upgrade');closeProfileMenu()" style="display:block;padding:.6rem 1rem;border-radius:8px;font-size:.9rem;color:var(--text)" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">&#11014; Change Plan</a>
+          <div style="border-top:1px solid rgba(255,255,255,.08);margin:.4rem 0"></div>
+          <a href="#" onclick="doLogout()" style="display:block;padding:.6rem 1rem;border-radius:8px;font-size:.9rem;color:var(--red)" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">&#128682; Log Out</a>
+        </div>
+      </div>
     </div>
   </div>
 </nav>
@@ -538,8 +547,8 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
         <div style="color:var(--muted);font-size:.88rem" id="dashSubtitle"></div>
       </div>
       <div style="display:flex;gap:.7rem;align-items:center">
-        <span class="status-badge pending" id="dashStatusBadge">⏳ Pending Setup</span>
-        <button class="btn btn-sm btn-primary" onclick="showPage('setup')">Complete Setup</button>
+        <span class="status-badge pending" id="dashStatusBadge">⏳ Setup Required</span>
+        <button class="btn btn-sm btn-primary" id="completeSetupBtn" onclick="showPage('setup')" style="display:none">Complete Setup</button>
       </div>
     </div>
 
@@ -708,6 +717,8 @@ function showPage(name) {
     updateSetupSummary();
   }
   if (name === 'dashboard') loadDashboard();
+  if (name === 'profile') loadProfile();
+  if (name === 'payment') initPaymentPage();
 }
 
 function scrollToSection(id) {
@@ -719,13 +730,14 @@ function updateNav() {
   const loggedIn = !!token;
   document.getElementById('loginBtn').style.display = loggedIn ? 'none' : '';
   document.getElementById('getLeadsBtn').style.display = loggedIn ? 'none' : '';
-  document.getElementById('dashBtn').style.display = loggedIn ? '' : 'none';
-  document.getElementById('logoutBtn').style.display = loggedIn ? '' : 'none';
+  const wrap = document.getElementById('profileMenuWrap');
+  if (wrap) wrap.style.display = loggedIn ? '' : 'none';
 }
 
 function doLogout() {
   token = null; businessId = null;
   localStorage.removeItem('lf_token'); localStorage.removeItem('lf_biz_id'); localStorage.removeItem('lf_plan');
+  closeProfileMenu();
   showPage('home'); updateNav();
 }
 
@@ -956,16 +968,20 @@ async function loadDashboard() {
 
     // Status badge
     const badge = document.getElementById('dashStatusBadge');
+    const setupBtn = document.getElementById('completeSetupBtn');
     if (data.has_payment_method) {
-      badge.className = 'status-badge active'; badge.textContent = '✅ Active';
+      badge.className = 'status-badge active';
+      badge.textContent = '✅ Active';
       document.getElementById('noCardAlert').style.display = 'none';
-      document.querySelector('[onclick="showPage(\'setup\')"]') && (document.querySelector('[onclick="showPage(\'setup\')"]').style.display = 'none');
+      if (setupBtn) setupBtn.style.display = 'none';
     } else {
-      badge.className = 'status-badge pending'; badge.textContent = '⏳ Setup Required';
+      badge.className = 'status-badge pending';
+      badge.textContent = '⏳ Setup Required';
       document.getElementById('noCardAlert').style.display = 'flex';
+      if (setupBtn) setupBtn.style.display = '';
     }
 
-    // Metrics
+        // Metrics
     document.getElementById('metricLeads').textContent = data.total_leads || 0;
     document.getElementById('metricCharged').textContent = '$' + ((data.total_charged || 0).toFixed(0));
     document.getElementById('metricPlan').textContent = (data.plan || 'pay_per_lead').replace('_', ' ');
@@ -1109,6 +1125,173 @@ document.addEventListener('DOMContentLoaded', () => {
   // Default plan selector
   selectPlanUI(selectedPlan || 'starter');
 });
+
+  // ================================================================ //
+  // PROFILE MENU                                                      //
+  // ================================================================ //
+  function toggleProfileMenu() {
+    const dd = document.getElementById('profileDropdown');
+    if (dd) dd.style.display = dd.style.display === 'none' ? '' : 'none';
+  }
+  function closeProfileMenu() {
+    const dd = document.getElementById('profileDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+  document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('profileMenuWrap');
+    if (wrap && !wrap.contains(e.target)) closeProfileMenu();
+  });
+
+  // ================================================================ //
+  // PROFILE PAGE                                                      //
+  // ================================================================ //
+  async function loadProfile() {
+    if (!token) { showPage('login'); return; }
+    try {
+      const res = await fetch(API + '/businesses/dashboard', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (res.status === 401) { doLogout(); return; }
+      const data = await res.json();
+      document.getElementById('profile-name').value = data.name || '';
+      document.getElementById('profile-email').value = data.email || '';
+      document.getElementById('profile-phone').value = data.phone || '';
+      document.getElementById('profile-city').value = data.city || '';
+      document.getElementById('profile-service').value = data.service_type || '';
+      document.getElementById('profile-plan').value = (PLAN_INFO[data.plan] || {name: data.plan}).name || data.plan || '';
+      const payEl = document.getElementById('profile-payment-status');
+      if (payEl) {
+        if (data.has_payment_method) {
+          payEl.innerHTML = '<span style="color:var(--green)">&#10003; Card on file &mdash; managed securely by Stripe</span>';
+        } else {
+          payEl.innerHTML = '<span style="color:#fbbf24">&#9888; No payment method. <a href="#" onclick="showPage('payment')" style="color:var(--accent)">Add one now &#8594;</a></span>';
+        }
+      }
+    } catch(e) { console.error('Profile load error', e); }
+  }
+
+  // ================================================================ //
+  // PAYMENT METHOD PAGE                                               //
+  // ================================================================ //
+  let paymentCardElement = null;
+  async function initPaymentPage() {
+    if (!token) { showPage('login'); return; }
+    try {
+      const res = await fetch(API + '/businesses/dashboard', { headers: { 'Authorization': 'Bearer ' + token } });
+      const data = await res.json();
+      const statusEl = document.getElementById('paymentStatusText');
+      if (statusEl) {
+        statusEl.innerHTML = data.has_payment_method
+          ? '<span style="color:var(--green)">&#10003; Card saved on file</span>'
+          : '<span style="color:#fbbf24">&#9888; No card on file &mdash; add one to start receiving leads</span>';
+      }
+    } catch(e) {}
+    setTimeout(() => {
+      if (!paymentCardElement) {
+        paymentCardElement = mountCardElement('payment-card-element');
+      }
+    }, 200);
+  }
+
+  async function doUpdatePayment() {
+    const btn = document.getElementById('payment-card-btn');
+    const msg = document.getElementById('paymentPageMsg');
+    if (!stripeInstance || !paymentCardElement) {
+      showMsg(msg, 'error', 'Card form not ready. Please refresh the page.');
+      return;
+    }
+    btn.innerHTML = '<span class="spinner"></span> Saving...';
+    hideMsg(msg);
+    try {
+      const plan = localStorage.getItem('lf_plan') || 'pay_per_lead';
+      const intentRes = await fetch(API + '/billing/setup-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ plan }),
+      });
+      const intentData = await intentRes.json();
+      if (!intentRes.ok) throw new Error(intentData.detail || 'Could not initialize payment setup');
+      const result = await stripeInstance.confirmCardSetup(intentData.client_secret, {
+        payment_method: { card: paymentCardElement }
+      });
+      if (result.error) throw new Error(result.error.message);
+      showMsg(msg, 'success', '&#10003; Payment method updated successfully!');
+      paymentCardElement = null;
+      setTimeout(() => showPage('dashboard'), 1500);
+    } catch(e) {
+      showMsg(msg, 'error', e.message);
+    } finally {
+      btn.innerHTML = '&#128274; Save New Card';
+    }
+  }
+
 </script>
+
+<!-- ======================================================== -->
+<!-- PAGE: PROFILE                                             -->
+<!-- ======================================================== -->
+<div class="page" id="page-profile">
+  <div class="container form-page">
+    <div class="form-container">
+      <div class="form-header">
+        <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:.4rem">My Profile</h2>
+        <p style="color:var(--muted)">Your account information</p>
+      </div>
+      <div class="form-card">
+        <div id="profileMsg" class="form-msg"></div>
+        <div style="margin-bottom:1.5rem">
+          <div class="form-group"><label>Business Name</label><input type="text" id="profile-name" readonly style="opacity:.7" /></div>
+          <div class="form-group"><label>Email</label><input type="email" id="profile-email" readonly style="opacity:.7" /></div>
+          <div class="form-row">
+            <div class="form-group"><label>Phone</label><input type="text" id="profile-phone" readonly style="opacity:.7" /></div>
+            <div class="form-group"><label>City</label><input type="text" id="profile-city" readonly style="opacity:.7" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Service Type</label><input type="text" id="profile-service" readonly style="opacity:.7" /></div>
+            <div class="form-group"><label>Current Plan</label><input type="text" id="profile-plan" readonly style="opacity:.7" /></div>
+          </div>
+          <div class="form-group">
+            <label>Payment Method</label>
+            <div id="profile-payment-status" style="padding:.8rem 1rem;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;font-size:.9rem;color:var(--muted)">Loading...</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="showPage('payment')">&#128179; Update Payment Method</button>
+          <button class="btn btn-outline btn-sm" onclick="showPage('upgrade')">&#11014; Change Plan</button>
+          <button class="btn btn-dark btn-sm" onclick="showPage('dashboard')">&#8592; Back to Dashboard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- PAGE: PAYMENT METHOD                                      -->
+<!-- ======================================================== -->
+<div class="page" id="page-payment">
+  <div class="container form-page">
+    <div class="form-container">
+      <div class="form-header">
+        <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:.4rem">&#128179; Payment Method</h2>
+        <p style="color:var(--muted)">Update your payment method securely via Stripe.</p>
+      </div>
+      <div class="form-card">
+        <div id="paymentPageMsg" class="form-msg"></div>
+        <div id="currentPaymentStatus" style="padding:1rem;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.15);border-radius:12px;margin-bottom:1.5rem;font-size:.9rem">
+          <strong>Current Status:</strong> <span id="paymentStatusText">Loading...</span>
+        </div>
+        <div class="form-group">
+          <label>New Card Details (secured by Stripe)</label>
+          <div class="stripe-element" id="payment-card-element"></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:.8rem" onclick="doUpdatePayment()">
+          <span id="payment-card-btn">&#128274; Save New Card</span>
+        </button>
+        <p style="text-align:center;color:var(--muted);font-size:.78rem;margin-top:.4rem">&#128274; Secured by Stripe. We never store card details.</p>
+        <div style="text-align:center;margin-top:1rem">
+          <button class="btn btn-dark btn-sm" onclick="showPage('dashboard')">&#8592; Back to Dashboard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
