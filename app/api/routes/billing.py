@@ -77,7 +77,9 @@ class SubscribeRequest(BaseModel):
 
 
 class ConfirmSetupRequest(BaseModel):
-    setup_intent_id: str
+    setup_intent_id: str | None = None
+    payment_method_id: str | None = None
+    stripe_customer_id: str | None = None
 
 
 @router.get("/plans")
@@ -147,15 +149,20 @@ async def confirm_setup(
     if not business or not business.stripe_customer_id:
         raise HTTPException(status_code=400, detail="Set up payment first via /billing/setup-intent")
 
-    intent = stripe.SetupIntent.retrieve(data.setup_intent_id)
-    if intent.get("status") != "succeeded":
-        raise HTTPException(status_code=400, detail="Card setup not completed yet.")
-    if intent.get("customer") != business.stripe_customer_id:
-        raise HTTPException(status_code=403, detail="Setup intent does not belong to this account.")
+    payment_method_id = data.payment_method_id
+    customer_id = data.stripe_customer_id
+    if data.setup_intent_id:
+        intent = stripe.SetupIntent.retrieve(data.setup_intent_id)
+        if intent.get("status") != "succeeded":
+            raise HTTPException(status_code=400, detail="Card setup not completed yet.")
+        customer_id = intent.get("customer") or customer_id
+        payment_method_id = intent.get("payment_method") or payment_method_id
 
-    payment_method_id = intent.get("payment_method")
+    if customer_id != business.stripe_customer_id:
+        raise HTTPException(status_code=403, detail="Setup/payment method does not belong to this account.")
+
     if not payment_method_id:
-        raise HTTPException(status_code=400, detail="No payment method found on setup intent.")
+        raise HTTPException(status_code=400, detail="No payment method provided.")
 
     business.stripe_payment_method_id = payment_method_id
     business.status = BusinessStatus.ACTIVE
