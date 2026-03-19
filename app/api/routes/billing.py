@@ -126,6 +126,7 @@ async def create_setup_intent(
         "client_secret": intent["client_secret"],
         "customer_id": business.stripe_customer_id,
         "plan": data.plan,
+        "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
     }
 
 
