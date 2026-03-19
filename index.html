@@ -1162,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.has_payment_method) {
           payEl.innerHTML = '<span style="color:var(--green)">&#10003; Card on file &mdash; managed securely by Stripe</span>';
         } else {
-          payEl.innerHTML = '<span style="color:#fbbf24">&#9888; No payment method. <a href="#" onclick="showPage('payment')" style="color:var(--accent)">Add one now &#8594;</a></span>';
+          payEl.innerHTML = "<span style='color:#fbbf24'>&#9888; No payment method. <a href='#' onclick='showPage(\"payment\")' style='color:var(--accent)'>Add one now &#8594;</a></span>";
         }
       }
     } catch(e) { console.error('Profile load error', e); }
