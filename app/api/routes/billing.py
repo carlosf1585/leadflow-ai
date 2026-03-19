@@ -1,5 +1,7 @@
 import uuid
 
+import json
+import redis.asyncio as aioredis
 import stripe
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import get_current_business
 from app.db.database import get_db
-from app.db.models import Subscription, SubscriptionStatus
+from app.db.models import BusinessStatus, Subscription, SubscriptionStatus
 from app.db.repositories.business_repo import BusinessRepository
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -74,6 +76,10 @@ class SubscribeRequest(BaseModel):
     plan: str
 
 
+class ConfirmSetupRequest(BaseModel):
+    setup_intent_id: str
+
+
 @router.get("/plans")
 async def get_plans():
     result = {}
@@ -127,6 +133,57 @@ async def create_setup_intent(
         "customer_id": business.stripe_customer_id,
         "plan": data.plan,
         "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+    }
+
+
+@router.post("/confirm-setup")
+async def confirm_setup(
+    data: ConfirmSetupRequest,
+    db: AsyncSession = Depends(get_db),
+    business_id: str = Depends(get_current_business),
+):
+    repo = BusinessRepository(db)
+    business = await repo.get_by_id(business_id)
+    if not business or not business.stripe_customer_id:
+        raise HTTPException(status_code=400, detail="Set up payment first via /billing/setup-intent")
+
+    intent = stripe.SetupIntent.retrieve(data.setup_intent_id)
+    if intent.get("status") != "succeeded":
+        raise HTTPException(status_code=400, detail="Card setup not completed yet.")
+    if intent.get("customer") != business.stripe_customer_id:
+        raise HTTPException(status_code=403, detail="Setup intent does not belong to this account.")
+
+    payment_method_id = intent.get("payment_method")
+    if not payment_method_id:
+        raise HTTPException(status_code=400, detail="No payment method found on setup intent.")
+
+    business.stripe_payment_method_id = payment_method_id
+    business.status = BusinessStatus.ACTIVE
+    await db.flush()
+
+    # Trigger campaign creation for this business niche/city so lead flow starts quickly.
+    try:
+        r = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            await r.rpush(
+                "queue:campaign",
+                json.dumps(
+                    {
+                        "action": "launch_campaign",
+                        "niche": (business.service_type.value if business.service_type else "service"),
+                        "cities": [business.city] if business.city else settings.DISCOVERY_CITIES[:1],
+                    }
+                ),
+            )
+        finally:
+            await r.close()
+    except Exception as e:
+        log.warning("Campaign trigger failed after payment setup", error=str(e), business_id=business_id)
+
+    return {
+        "ok": True,
+        "payment_method_id": payment_method_id,
+        "business_status": business.status.value if business.status else None,
     }
 
 

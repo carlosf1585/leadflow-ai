@@ -669,7 +669,7 @@ footer{border-top:1px solid var(--border);padding:2rem 0;color:var(--muted);font
 //  CONFIG                                                           //
 // ================================================================ //
 const API = 'https://leadflow-ai-production-813c.up.railway.app/api';
-const STRIPE_PK = window.__STRIPE_PK__ || 'pk_live_YOUR_STRIPE_PUBLISHABLE_KEY'; // Set STRIPE_PUBLISHABLE_KEY env var or replace this
+let stripePublishableKey = window.__STRIPE_PK__ || null;
 
 // ================================================================ //
 //  STATE                                                            //
@@ -686,8 +686,24 @@ let stripeCustomerId = null;
 //  STRIPE INIT                                                      //
 // ================================================================ //
 function initStripe() {
-  if (stripeInstance) return;
-  try { stripeInstance = Stripe(STRIPE_PK); } catch(e) { console.warn('Stripe init failed', e); }
+  if (stripeInstance) return stripeInstance;
+  if (!stripePublishableKey) return null;
+  try { stripeInstance = Stripe(stripePublishableKey); } catch(e) { console.warn('Stripe init failed', e); }
+  return stripeInstance;
+}
+
+function setStripePublishableKey(nextKey) {
+  if (!nextKey || typeof nextKey !== 'string') return;
+  if (nextKey === stripePublishableKey && stripeInstance) return;
+  stripePublishableKey = nextKey;
+  stripeInstance = null;
+  [cardElement, setupCardElement, paymentCardElement].forEach(el => {
+    if (!el) return;
+    try { el.unmount(); } catch(_) {}
+  });
+  cardElement = null;
+  setupCardElement = null;
+  paymentCardElement = null;
 }
 
 function mountCardElement(containerId) {
@@ -842,6 +858,8 @@ async function initCardSetup() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
+    setStripePublishableKey(data.publishable_key);
+    cardElement = mountCardElement('card-element');
     window.__clientSecret = data.client_secret;
     stripeCustomerId = data.customer_id;
     updatePlanSummary();
@@ -864,6 +882,15 @@ async function doCardSetup() {
       payment_method: { card: cardElement }
     });
     if (result.error) throw new Error(result.error.message);
+    const setupIntentId = result.setupIntent && result.setupIntent.id;
+    if (!setupIntentId) throw new Error('Missing setup intent confirmation. Please try again.');
+    const confirmRes = await fetch(API + '/billing/confirm-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ setup_intent_id: setupIntentId }),
+    });
+    const confirmData = await confirmRes.json();
+    if (!confirmRes.ok) throw new Error(confirmData.detail || 'Could not save payment method.');
 
     showMsg(msg, 'success', '✅ Card saved successfully!');
 
@@ -1036,7 +1063,6 @@ async function loadDashboard() {
 async function doSetupCard() {
   const btn = document.getElementById('setup-card-btn');
   const msg = document.getElementById('setupMsg');
-  if (!stripeInstance || !setupCardElement) { showMsg(msg, 'error', 'Card form not ready. Refresh.'); return; }
 
   btn.innerHTML = '<span class="spinner"></span> Saving...';
   hideMsg(msg);
@@ -1050,11 +1076,23 @@ async function doSetupCard() {
     });
     const intentData = await intentRes.json();
     if (!intentRes.ok) throw new Error(intentData.detail);
+    setStripePublishableKey(intentData.publishable_key);
+    if (!setupCardElement) setupCardElement = mountCardElement('setup-card-element');
+    if (!stripeInstance || !setupCardElement) throw new Error('Card form not ready. Refresh.');
 
     const result = await stripeInstance.confirmCardSetup(intentData.client_secret, {
       payment_method: { card: setupCardElement }
     });
     if (result.error) throw new Error(result.error.message);
+    const setupIntentId = result.setupIntent && result.setupIntent.id;
+    if (!setupIntentId) throw new Error('Missing setup intent confirmation. Please try again.');
+    const confirmRes = await fetch(API + '/billing/confirm-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ setup_intent_id: setupIntentId }),
+    });
+    const confirmData = await confirmRes.json();
+    if (!confirmRes.ok) throw new Error(confirmData.detail || 'Could not save payment method.');
 
     showMsg(msg, 'success', '✅ Card saved! Activating your account...');
 
@@ -1194,10 +1232,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function doUpdatePayment() {
     const btn = document.getElementById('payment-card-btn');
     const msg = document.getElementById('paymentPageMsg');
-    if (!stripeInstance || !paymentCardElement) {
-      showMsg(msg, 'error', 'Card form not ready. Please refresh the page.');
-      return;
-    }
     btn.innerHTML = '<span class="spinner"></span> Saving...';
     hideMsg(msg);
     try {
@@ -1209,10 +1243,22 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const intentData = await intentRes.json();
       if (!intentRes.ok) throw new Error(intentData.detail || 'Could not initialize payment setup');
+      setStripePublishableKey(intentData.publishable_key);
+      if (!paymentCardElement) paymentCardElement = mountCardElement('payment-card-element');
+      if (!stripeInstance || !paymentCardElement) throw new Error('Card form not ready. Please refresh the page.');
       const result = await stripeInstance.confirmCardSetup(intentData.client_secret, {
         payment_method: { card: paymentCardElement }
       });
       if (result.error) throw new Error(result.error.message);
+      const setupIntentId = result.setupIntent && result.setupIntent.id;
+      if (!setupIntentId) throw new Error('Missing setup intent confirmation. Please try again.');
+      const confirmRes = await fetch(API + '/billing/confirm-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ setup_intent_id: setupIntentId }),
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmRes.ok) throw new Error(confirmData.detail || 'Could not save payment method.');
       showMsg(msg, 'success', '&#10003; Payment method updated successfully!');
       paymentCardElement = null;
       setTimeout(() => showPage('dashboard'), 1500);
