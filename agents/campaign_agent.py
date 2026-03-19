@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import structlog
 from openai import AsyncOpenAI
 from agents.base_agent import BaseAgent
@@ -39,7 +40,7 @@ class CampaignAgent(BaseAgent):
 
     def __init__(self):
         super().__init__()
-        self.openai = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        self.openai = AsyncOpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
 
     # ------------------------------------------------------------------ #
     #  Google Ads client                                                   #
@@ -47,15 +48,37 @@ class CampaignAgent(BaseAgent):
 
     def _get_ads_client(self):
         from google.ads.googleads.client import GoogleAdsClient
+        login_customer_id = self._normalize_customer_id(settings.GOOGLE_ADS_MANAGER_CUSTOMER_ID)
         credentials = {
             "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
             "client_id": settings.GOOGLE_ADS_CLIENT_ID,
             "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
             "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
-            "login_customer_id": settings.GOOGLE_ADS_MANAGER_CUSTOMER_ID,
+            "login_customer_id": login_customer_id,
             "use_proto_plus": True,
         }
         return GoogleAdsClient.load_from_dict(credentials)
+
+    def _validate_ads_settings(self) -> list:
+        required = [
+            "GOOGLE_ADS_DEVELOPER_TOKEN",
+            "GOOGLE_ADS_CLIENT_ID",
+            "GOOGLE_ADS_CLIENT_SECRET",
+            "GOOGLE_ADS_REFRESH_TOKEN",
+            "GOOGLE_ADS_MANAGER_CUSTOMER_ID",
+            "GOOGLE_ADS_CUSTOMER_ID",
+        ]
+        missing = [name for name in required if not getattr(settings, name, None)]
+        if missing:
+            log.error("Campaign agent missing required settings", missing=missing)
+        return missing
+
+    @staticmethod
+    def _normalize_customer_id(customer_id: str | None) -> str | None:
+        if not customer_id:
+            return None
+        normalized = re.sub(r"[^0-9]", "", customer_id)
+        return normalized or None
 
     def _get_or_create_campaign(self, client, customer_id: str, niche: str, city: str) -> str:
         """Create a Search campaign for niche+city. Returns resource name."""
@@ -162,6 +185,8 @@ class CampaignAgent(BaseAgent):
     # ------------------------------------------------------------------ #
 
     async def _generate_ad_copy(self, niche: str, city: str) -> dict:
+        if not self.openai:
+            return {}
         msg = await self.openai.chat.completions.create(
             model=settings.OPENAI_MODEL_FAST,
             max_tokens=400,
@@ -223,9 +248,11 @@ class CampaignAgent(BaseAgent):
         action = payload.get("action")
 
         if action == "launch_campaign":
+            if self._validate_ads_settings():
+                return
             niche = payload.get("niche", "plumber")
             cities = payload.get("cities", settings.DISCOVERY_CITIES[:3])
-            customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
+            customer_id = self._normalize_customer_id(settings.GOOGLE_ADS_CUSTOMER_ID)
 
             if not customer_id:
                 log.error("GOOGLE_ADS_CUSTOMER_ID not set")
@@ -255,7 +282,7 @@ class CampaignAgent(BaseAgent):
                     log.error("Campaign launch error", niche=niche, city=city, error=str(e))
 
         elif action == "check_performance":
-            customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
+            customer_id = self._normalize_customer_id(settings.GOOGLE_ADS_CUSTOMER_ID)
             if customer_id:
                 await self._check_ads_performance(customer_id)
             async with AsyncSessionLocal() as db:
@@ -267,7 +294,7 @@ class CampaignAgent(BaseAgent):
         elif action == "pause_campaign":
             niche = payload.get("niche")
             city = payload.get("city")
-            customer_id = settings.GOOGLE_ADS_CUSTOMER_ID
+            customer_id = self._normalize_customer_id(settings.GOOGLE_ADS_CUSTOMER_ID)
             if not all([customer_id, niche, city]):
                 return
             try:
