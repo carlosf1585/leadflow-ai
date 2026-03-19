@@ -882,6 +882,15 @@ async function doCardSetup() {
       payment_method: { card: cardElement }
     });
     if (result.error) throw new Error(result.error.message);
+    const setupIntentId = result.setupIntent && result.setupIntent.id;
+    if (!setupIntentId) throw new Error('Missing setup intent confirmation. Please try again.');
+    const confirmRes = await fetch(API + '/billing/confirm-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ setup_intent_id: setupIntentId }),
+    });
+    const confirmData = await confirmRes.json();
+    if (!confirmRes.ok) throw new Error(confirmData.detail || 'Could not save payment method.');
 
     showMsg(msg, 'success', '✅ Card saved successfully!');
 
@@ -1075,6 +1084,15 @@ async function doSetupCard() {
       payment_method: { card: setupCardElement }
     });
     if (result.error) throw new Error(result.error.message);
+    const setupIntentId = result.setupIntent && result.setupIntent.id;
+    if (!setupIntentId) throw new Error('Missing setup intent confirmation. Please try again.');
+    const confirmRes = await fetch(API + '/billing/confirm-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ setup_intent_id: setupIntentId }),
+    });
+    const confirmData = await confirmRes.json();
+    if (!confirmRes.ok) throw new Error(confirmData.detail || 'Could not save payment method.');
 
     showMsg(msg, 'success', '✅ Card saved! Activating your account...');
 
@@ -1232,6 +1250,15 @@ document.addEventListener('DOMContentLoaded', () => {
         payment_method: { card: paymentCardElement }
       });
       if (result.error) throw new Error(result.error.message);
+      const setupIntentId = result.setupIntent && result.setupIntent.id;
+      if (!setupIntentId) throw new Error('Missing setup intent confirmation. Please try again.');
+      const confirmRes = await fetch(API + '/billing/confirm-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ setup_intent_id: setupIntentId }),
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmRes.ok) throw new Error(confirmData.detail || 'Could not save payment method.');
       showMsg(msg, 'success', '&#10003; Payment method updated successfully!');
       paymentCardElement = null;
       setTimeout(() => showPage('dashboard'), 1500);
