@@ -26,7 +26,7 @@ async def _push(queue: str, payload: dict):
         r = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         try:
                     await r.rpush(queue, json.dumps(payload))
-finally:
+        finally:
         await r.close()
 
 
