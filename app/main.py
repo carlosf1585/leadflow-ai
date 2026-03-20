@@ -18,63 +18,48 @@ from app.api.routes import leads, businesses, billing, webhooks, admin
 configure_logging()
 log = structlog.get_logger()
 
-# ---------------------------------------------------------------------------
-# Scheduler helpers (inline from scheduler/cron.py)
-# ---------------------------------------------------------------------------
 
 async def _push(queue: str, payload: dict):
-        r = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-        try:
-                    await r.rpush(queue, json.dumps(payload))
-        finally:
+    r = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    try:
+        await r.rpush(queue, json.dumps(payload))
+    finally:
         await r.close()
 
 
 async def trigger_discovery():
-        for city in settings.DISCOVERY_CITIES:
-                    await _push("queue:discovery", {
-                                    "action": "discover",
-                                    "city": city,
-                                    "categories": settings.SERVICE_CATEGORIES,
-                    })
-                log.info("Discovery cron triggered")
+    for city in settings.DISCOVERY_CITIES:
+        await _push("queue:discovery", {"action": "discover", "city": city, "categories": settings.SERVICE_CATEGORIES})
+    log.info("Discovery cron triggered")
 
 
 async def trigger_daily_report():
-        await _push("queue:analytics", {"action": "daily_report"})
+    await _push("queue:analytics", {"action": "daily_report"})
 
 
 async def trigger_niche_discovery():
-        await _push("queue:niche", {"action": "discover_niches"})
+    await _push("queue:niche", {"action": "discover_niches"})
 
 
 async def trigger_sales_sequences():
-        await _push("queue:sales", {"action": "run_sequences"})
+    await _push("queue:sales", {"action": "run_sequences"})
 
 
 async def trigger_campaign_check():
-        await _push("queue:campaign", {"action": "check_performance"})
+    await _push("queue:campaign", {"action": "check_performance"})
 
 
 async def trigger_campaign_launch():
-        for niche in settings.SERVICE_CATEGORIES:
-                    await _push("queue:campaign", {
-                                    "action": "launch_campaign",
-                                    "niche": niche,
-                                    "cities": settings.DISCOVERY_CITIES[:3],
-                    })
-                log.info("Campaign launch cron triggered")
+    for niche in settings.SERVICE_CATEGORIES:
+        await _push("queue:campaign", {"action": "launch_campaign", "niche": niche, "cities": settings.DISCOVERY_CITIES[:3]})
+    log.info("Campaign launch cron triggered")
 
 
-# ---------------------------------------------------------------------------
-# Agent runner – starts every agent as a background asyncio task
-# ---------------------------------------------------------------------------
-
-_agent_tasks: list[asyncio.Task] = []
+_agent_tasks = []
 
 
 async def _start_agents():
-        from agents.discovery_agent import DiscoveryAgent
+    from agents.discovery_agent import DiscoveryAgent
     from agents.outreach_agent import OutreachAgent
     from agents.qualify_agent import QualifyAgent
     from agents.routing_agent import RoutingAgent
@@ -85,50 +70,33 @@ async def _start_agents():
     from agents.landing_agent import LandingAgent
     from agents.campaign_agent import CampaignAgent
 
-    agents = [
-                DiscoveryAgent(),
-                OutreachAgent(),
-                QualifyAgent(),
-                RoutingAgent(),
-                BillingAgent(),
-                AnalyticsAgent(),
-                NicheAgent(),
-                SalesAgent(),
-                LandingAgent(),
-                CampaignAgent(),
+    agent_classes = [
+        DiscoveryAgent, OutreachAgent, QualifyAgent, RoutingAgent,
+        BillingAgent, AnalyticsAgent, NicheAgent, SalesAgent,
+        LandingAgent, CampaignAgent,
     ]
-
-    for agent in agents:
-                task = asyncio.create_task(agent.run())
-                _agent_tasks.append(task)
-                log.info("Agent task started", agent=agent.name)
+    for cls in agent_classes:
+        agent = cls()
+        task = asyncio.create_task(agent.run())
+        _agent_tasks.append(task)
+        log.info("Agent task started", agent=agent.name)
 
 
 async def _stop_agents():
-        for task in _agent_tasks:
-                    task.cancel()
-                await asyncio.gather(*_agent_tasks, return_exceptions=True)
+    for task in _agent_tasks:
+        task.cancel()
+    await asyncio.gather(*_agent_tasks, return_exceptions=True)
     _agent_tasks.clear()
     log.info("All agent tasks stopped")
 
 
-# ---------------------------------------------------------------------------
-# FastAPI lifespan – starts DB, agents, and scheduler
-# ---------------------------------------------------------------------------
-
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-        log.info("LeadFlow AI starting up", env=settings.ENV)
-
-    # 1. Create DB tables
+    log.info("LeadFlow AI starting up", env=settings.ENV)
     async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            log.info("Database tables ready")
-
-    # 2. Start all agents as background tasks
+        await conn.run_sync(Base.metadata.create_all)
+    log.info("Database tables ready")
     await _start_agents()
-
-    # 3. Start APScheduler
     scheduler = AsyncIOScheduler()
     scheduler.add_job(trigger_discovery, "cron", hour=2, minute=0)
     scheduler.add_job(trigger_daily_report, "cron", hour=8, minute=0)
@@ -138,34 +106,26 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(trigger_campaign_launch, "cron", hour=4, minute=0)
     scheduler.start()
     log.info("Scheduler started with campaign launch job")
-
     yield
-
-    # Shutdown
     scheduler.shutdown(wait=False)
     await _stop_agents()
     log.info("LeadFlow AI shutting down")
 
 
-app = FastAPI(
-        title="LeadFlow AI",
-        version="3.1.0",
-        description="Automated AI-powered lead generation SaaS platform",
-        lifespan=lifespan,
-)
+app = FastAPI(title="LeadFlow AI", version="3.1.0", lifespan=lifespan)
 
 app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-        log.error("Unhandled exception", path=request.url.path, error=str(exc))
+    log.error("Unhandled exception", path=request.url.path, error=str(exc))
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
@@ -178,4 +138,4 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 @app.get("/health")
 async def health():
-        return {"status": "ok", "version": "3.1.0", "agents": len(_agent_tasks)}
+    return {"status": "ok", "version": "3.1.0", "agents": len(_agent_tasks)}
